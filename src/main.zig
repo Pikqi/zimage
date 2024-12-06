@@ -6,41 +6,77 @@ const r = @cImport({
 });
 
 pub fn main() !void {
-    const screnWidth: f32 = 400;
-    const screnHeight: f32 = 800;
-    r.InitWindow(screnWidth, screnHeight, "test");
-
     const image = r.LoadImage("./zero.png");
-    var scale: f32 = 1;
+    var windowWidth: c_int = image.width;
+    var windowHeight: c_int = image.height;
+    r.SetConfigFlags(r.FLAG_VSYNC_HINT | r.FLAG_MSAA_4X_HINT | r.FLAG_WINDOW_RESIZABLE);
+    r.InitWindow(windowWidth, windowHeight, "zimage");
+
+    const realImageDimension: @Vector(2, u32) = .{ @intCast(image.width), @intCast(image.height) };
 
     var widthPaddingNeeded = false;
-
-    if (image.width > screnWidth) {
-        scale = screnWidth / @as(f32, @floatFromInt(image.width));
-
-        if (@as(f32, @floatFromInt(image.height)) * scale > screnHeight) {
-            scale = screnHeight / @as(f32, @floatFromInt(image.height));
-            widthPaddingNeeded = true;
-        }
-    }
-    std.debug.print("scale {d} \n", .{scale});
-    const realImageDimension: @Vector(2, u32) = .{ @intCast(image.width), @intCast(image.height) };
-    var scaledImageDimesion: @Vector(2, f32) = @floatFromInt(realImageDimension);
-    scaledImageDimesion *= @splat(scale);
-    std.log.debug("{d}", .{scaledImageDimesion});
-    r.SetTargetFPS(1);
+    var scaledImageDimension: @Vector(2, f32) = undefined;
+    var imagePosX: f32 = undefined;
+    var imagePosY: f32 = undefined;
+    var scale: f32 = 1;
+    rescale(&imagePosX, &imagePosY, &scaledImageDimension, realImageDimension, &widthPaddingNeeded, &scale);
 
     const im = r.LoadTextureFromImage(image);
     r.UnloadImage(image);
     while (!r.WindowShouldClose()) {
+        if (r.GetRenderHeight() != windowHeight or windowWidth != r.GetRenderWidth()) {
+            windowHeight = r.GetRenderHeight();
+            windowWidth = r.GetRenderWidth();
+            rescale(&imagePosX, &imagePosY, &scaledImageDimension, realImageDimension, &widthPaddingNeeded, &scale);
+        }
+
         r.BeginDrawing();
         defer r.EndDrawing();
         r.ClearBackground(r.WHITE);
         r.DrawTextureEx(im, .{
-            .x = if (widthPaddingNeeded) screnWidth / 2 - scaledImageDimesion[0] / 2 else 0,
-            .y = if (!widthPaddingNeeded) screnHeight / 2 - scaledImageDimesion[1] / 2 else 0,
+            .x = imagePosX,
+            .y = imagePosY,
         }, 0, scale, r.WHITE);
     }
+}
+
+fn rescale(
+    imagePosX: *f32,
+    imagePosY: *f32,
+    scaledImageDimension: *@Vector(2, f32),
+    realImageDimension: @Vector(2, u32),
+    widthPaddingNeeded: *bool,
+    scale: *f32,
+) void {
+    const windowWidth = r.GetRenderWidth();
+    const windowHeight = r.GetRenderHeight();
+    widthPaddingNeeded.* = false;
+    scale.* = 1;
+    // image is bigger than screen
+    if (realImageDimension[0] > windowWidth) {
+        scale.* = @as(f32, @floatFromInt(windowWidth)) / @as(f32, @floatFromInt(realImageDimension[0]));
+    }
+    if (realImageDimension[1] > windowHeight) {
+        scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
+        widthPaddingNeeded.* = true;
+    }
+    // image is smaller than screen
+    if (realImageDimension[0] < windowWidth) {
+        scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
+        widthPaddingNeeded.* = false;
+    }
+    if (realImageDimension[1] < windowHeight) {
+        scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
+        widthPaddingNeeded.* = true;
+    }
+
+    // not sure why this gives an type eror
+    // scaledImageDimension.* = @as(@Vector(2, f32), @splat(scale.*)) * @as(f32, @floatFromInt(realImageDimension));
+    scaledImageDimension.* = @floatFromInt(realImageDimension);
+    scaledImageDimension.* *= @splat(scale.*);
+
+    imagePosX.* = if (widthPaddingNeeded.*) @as(f32, @floatFromInt(windowWidth)) / 2.0 - scaledImageDimension.*[0] / 2.0 else 0;
+    imagePosY.* = if (!widthPaddingNeeded.*) @as(f32, @floatFromInt(windowHeight)) / 2.0 - scaledImageDimension.*[1] / 2.0 else 0;
 }
 
 test "simple test" {
