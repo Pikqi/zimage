@@ -6,29 +6,41 @@ const r = @cImport({
 });
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
-    const screnWidth = 800;
-    const screnHeight = 400;
+    const screnWidth: f32 = 400;
+    const screnHeight: f32 = 800;
     r.InitWindow(screnWidth, screnHeight, "test");
 
+    const image = r.LoadImage("./zero.png");
+    var scale: f32 = 1;
+
+    var widthPaddingNeeded = false;
+
+    if (image.width > screnWidth) {
+        scale = screnWidth / @as(f32, @floatFromInt(image.width));
+
+        if (@as(f32, @floatFromInt(image.height)) * scale > screnHeight) {
+            scale = screnHeight / @as(f32, @floatFromInt(image.height));
+            widthPaddingNeeded = true;
+        }
+    }
+    std.debug.print("scale {d} \n", .{scale});
+    const realImageDimension: @Vector(2, u32) = .{ @intCast(image.width), @intCast(image.height) };
+    var scaledImageDimesion: @Vector(2, f32) = @floatFromInt(realImageDimension);
+    scaledImageDimesion *= @splat(scale);
+    std.log.debug("{d}", .{scaledImageDimesion});
+    r.SetTargetFPS(1);
+
+    const im = r.LoadTextureFromImage(image);
+    r.UnloadImage(image);
     while (!r.WindowShouldClose()) {
         r.BeginDrawing();
         defer r.EndDrawing();
-        r.ClearBackground(r.PINK);
+        r.ClearBackground(r.WHITE);
+        r.DrawTextureEx(im, .{
+            .x = if (widthPaddingNeeded) screnWidth / 2 - scaledImageDimesion[0] / 2 else 0,
+            .y = if (!widthPaddingNeeded) screnHeight / 2 - scaledImageDimesion[1] / 2 else 0,
+        }, 0, scale, r.WHITE);
     }
-
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush(); // don't forget to flush!
 }
 
 test "simple test" {
