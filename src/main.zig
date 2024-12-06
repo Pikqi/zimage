@@ -14,12 +14,11 @@ pub fn main() !void {
 
     const realImageDimension: @Vector(2, u32) = .{ @intCast(image.width), @intCast(image.height) };
 
-    var widthPaddingNeeded = false;
     var scaledImageDimension: @Vector(2, f32) = undefined;
     var imagePosX: f32 = undefined;
     var imagePosY: f32 = undefined;
     var scale: f32 = 1;
-    rescale(&imagePosX, &imagePosY, &scaledImageDimension, realImageDimension, &widthPaddingNeeded, &scale);
+    rescale(&imagePosX, &imagePosY, &scaledImageDimension, realImageDimension, &scale);
 
     const im = r.LoadTextureFromImage(image);
     r.UnloadImage(image);
@@ -27,7 +26,7 @@ pub fn main() !void {
         if (r.GetRenderHeight() != windowHeight or windowWidth != r.GetRenderWidth()) {
             windowHeight = r.GetRenderHeight();
             windowWidth = r.GetRenderWidth();
-            rescale(&imagePosX, &imagePosY, &scaledImageDimension, realImageDimension, &widthPaddingNeeded, &scale);
+            rescale(&imagePosX, &imagePosY, &scaledImageDimension, realImageDimension, &scale);
         }
 
         r.BeginDrawing();
@@ -45,12 +44,10 @@ fn rescale(
     imagePosY: *f32,
     scaledImageDimension: *@Vector(2, f32),
     realImageDimension: @Vector(2, u32),
-    widthPaddingNeeded: *bool,
     scale: *f32,
 ) void {
     const windowWidth = r.GetRenderWidth();
     const windowHeight = r.GetRenderHeight();
-    widthPaddingNeeded.* = false;
     scale.* = 1;
     // image is bigger than screen
     if (realImageDimension[0] > windowWidth) {
@@ -58,16 +55,13 @@ fn rescale(
     }
     if (realImageDimension[1] > windowHeight) {
         scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
-        widthPaddingNeeded.* = true;
     }
     // image is smaller than screen
     if (realImageDimension[0] < windowWidth) {
         scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
-        widthPaddingNeeded.* = false;
     }
     if (realImageDimension[1] < windowHeight) {
         scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
-        widthPaddingNeeded.* = true;
     }
 
     // not sure why this gives an type eror
@@ -75,8 +69,10 @@ fn rescale(
     scaledImageDimension.* = @floatFromInt(realImageDimension);
     scaledImageDimension.* *= @splat(scale.*);
 
-    imagePosX.* = if (widthPaddingNeeded.*) @as(f32, @floatFromInt(windowWidth)) / 2.0 - scaledImageDimension.*[0] / 2.0 else 0;
-    imagePosY.* = if (!widthPaddingNeeded.*) @as(f32, @floatFromInt(windowHeight)) / 2.0 - scaledImageDimension.*[1] / 2.0 else 0;
+    const widthPaddingNeeded = scaledImageDimension.*[0] < @as(f32, @floatFromInt(windowWidth));
+
+    imagePosX.* = if (widthPaddingNeeded) @as(f32, @floatFromInt(windowWidth)) / 2.0 - scaledImageDimension.*[0] / 2.0 else 0;
+    imagePosY.* = if (!widthPaddingNeeded) @as(f32, @floatFromInt(windowHeight)) / 2.0 - scaledImageDimension.*[1] / 2.0 else 0;
 }
 
 test "simple test" {
