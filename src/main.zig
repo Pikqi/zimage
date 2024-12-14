@@ -76,7 +76,6 @@ pub fn main() !void {
                 continue;
             }
             if (isSupportedPicture(val.name)) {
-                std.log.info("FOUND {s}", .{val.name});
                 const fullPath = try std.mem.concat(alloc, u8, &.{ path, "/", val.name });
                 defer alloc.free(fullPath);
 
@@ -123,7 +122,6 @@ pub fn main() !void {
 
     var mousePosition = r.GetMousePosition();
     var mouseClicked = false;
-    std.log.debug("list items size {d}\n", .{imagesList.items.len});
     while (!r.WindowShouldClose()) {
         windowInfo.bottom_padding = @divFloor(windowInfo.windowHeight, 5);
         if (r.GetRenderHeight() != windowInfo.windowHeight or windowInfo.windowWidth != r.GetRenderWidth()) {
@@ -133,6 +131,11 @@ pub fn main() !void {
         }
 
         // MOUSE INPUT
+        mouseClicked = false;
+        if (r.IsMouseButtonPressed(r.MOUSE_BUTTON_LEFT)) {
+            mouseClicked = true;
+            mousePosition = r.GetMousePosition();
+        }
 
         //  VERTICAL SCROLL
         if (r.GetMouseWheelMoveV().y != 0) {
@@ -146,12 +149,6 @@ pub fn main() !void {
             if (pointIntersectsRectangle(.{ r.GetMousePosition().x, r.GetMousePosition().y }, 0, @floatFromInt(windowInfo.windowHeight - windowInfo.bottom_padding), @floatFromInt(windowInfo.windowWidth), @floatFromInt(windowInfo.windowHeight))) {
                 windowInfo.horizontalScroll = clamp(windowInfo.horizontalScroll + 60 * @as(c_int, @intFromFloat(r.GetMouseWheelMoveV().x)), 0, windowInfo.thumbarWidth);
             }
-        }
-
-        mouseClicked = false;
-        if (r.IsMouseButtonPressed(r.MOUSE_BUTTON_LEFT)) {
-            mouseClicked = true;
-            mousePosition = r.GetMousePosition();
         }
 
         // KEYBOARD INPUT
@@ -214,11 +211,6 @@ fn setImageIndex(
     const elementThumbPosition: c_int = @as(c_int, @intCast(selected_image_index.*)) * (windowInfo.bottom_padding + windowInfo.thumbnail_margin);
 
     windowInfo.horizontalScroll = clamp(elementThumbPosition, 0, windowInfo.thumbarWidth + (windowInfo.bottom_padding + windowInfo.thumbnail_margin));
-
-    std.log.debug("scroll {d} {d}", .{ @as(c_int, @intCast(selected_image_index.* + 1)) * (windowInfo.bottom_padding + windowInfo.thumbnail_margin), windowInfo.windowWidth });
-
-    // if(@as(c_int, @intCast(selected_image_index.* + 1)) * (bottom_padding + thumbnail_margin) > windowInfo.windowWidth)
-
 }
 fn pointIntersectsRectangle(point: @Vector(2, f32), x: f32, y: f32, width: f32, height: f32) bool {
     if (point[0] > x and point[0] < x + width) {
@@ -273,15 +265,12 @@ fn rescale(
     const windowWidth = r.GetRenderWidth();
     const windowHeight = r.GetRenderHeight() - bottom_padding;
     var scaledImageDimension: @Vector(2, f32) = undefined;
-    std.log.debug("window w: {d} h: {d}\n", .{ windowWidth, windowHeight });
-    std.log.debug("image {d}", .{realImageDimension});
     scale.* = 1;
     // image is bigger than screen
     scaleBlk: {
         if (realImageDimension[0] > windowWidth) {
             scale.* = @as(f32, @floatFromInt(windowWidth)) / @as(f32, @floatFromInt(realImageDimension[0]));
         }
-        std.log.debug("scale 1: {d}", .{scale.*});
         if (realImageDimension[1] > windowHeight) {
             scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
         }
@@ -304,7 +293,6 @@ fn rescale(
 
     const widthPaddingNeeded = scaledImageDimension[0] < @as(f32, @floatFromInt(windowWidth));
 
-    std.log.debug("scale: {d}", .{scale.*});
     imagePosX.* = if (widthPaddingNeeded) @as(f32, @floatFromInt(windowWidth)) / 2.0 - scaledImageDimension[0] / 2.0 else 0;
     imagePosY.* = if (!widthPaddingNeeded) @as(f32, @floatFromInt(windowHeight)) / 2.0 - scaledImageDimension[1] / 2.0 else 0;
 }
