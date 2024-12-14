@@ -142,22 +142,28 @@ fn rescale(
     const windowWidth = r.GetRenderWidth();
     const windowHeight = r.GetRenderHeight();
     var scaledImageDimension: @Vector(2, f32) = undefined;
-    std.log.debug("w: {d} h: {d}\n", .{ windowWidth, windowHeight });
-    std.log.debug("{d}", .{realImageDimension});
+    std.log.debug("window w: {d} h: {d}\n", .{ windowWidth, windowHeight });
+    std.log.debug("image {d}", .{realImageDimension});
     scale.* = 1;
     // image is bigger than screen
-    if (realImageDimension[0] > windowWidth) {
-        scale.* = @as(f32, @floatFromInt(windowWidth)) / @as(f32, @floatFromInt(realImageDimension[0]));
-    }
-    if (realImageDimension[1] > windowHeight) {
-        scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
-    }
-    // image is smaller than screen
-    if (realImageDimension[0] < windowWidth) {
-        scale.* = @max(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
-    }
-    if (realImageDimension[1] < windowHeight) {
-        scale.* = @max(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
+    scaleBlk: {
+        if (realImageDimension[0] > windowWidth) {
+            scale.* = @as(f32, @floatFromInt(windowWidth)) / @as(f32, @floatFromInt(realImageDimension[0]));
+        }
+        std.log.debug("scale 1: {d}", .{scale.*});
+        if (realImageDimension[1] > windowHeight) {
+            scale.* = @min(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
+        }
+        if (scale.* != 1) {
+            break :scaleBlk;
+        }
+        // image is smaller than screen
+        if (realImageDimension[0] < windowWidth) {
+            scale.* = @max(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
+        }
+        if (realImageDimension[1] < windowHeight) {
+            scale.* = @max(scale.*, @as(f32, @floatFromInt(windowHeight)) / @as(f32, @floatFromInt(realImageDimension[1])));
+        }
     }
 
     // not sure why this gives an type eror
