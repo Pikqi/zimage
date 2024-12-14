@@ -5,6 +5,8 @@ const r = @cImport({
     @cInclude("rlgl.h");
 });
 
+const thumnail_padding = 20;
+
 const ImageToShow = struct {
     texture: r.Texture,
     dimension: @Vector(2, u32),
@@ -97,28 +99,39 @@ pub fn main() !void {
     var imagePosX: f32 = undefined;
     var imagePosY: f32 = undefined;
     var scale: f32 = 1;
-    rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale);
+    var bottom_padding: c_int = 50;
+    rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale, bottom_padding);
 
+    var mousePosition = r.GetMousePosition();
+    var mouseClicked = false;
     std.log.debug("list items size {d}\n", .{imagesList.items.len});
     while (!r.WindowShouldClose()) {
+        bottom_padding = @divFloor(windowHeight, 5);
         if (r.GetRenderHeight() != windowHeight or windowWidth != r.GetRenderWidth()) {
             windowHeight = r.GetRenderHeight();
             windowWidth = r.GetRenderWidth();
-            rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale);
+            rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale, bottom_padding);
         }
 
+        // MOUSE INPUT
+
+        mouseClicked = false;
+        if (r.IsMouseButtonPressed(r.MOUSE_BUTTON_LEFT)) {
+            mouseClicked = true;
+            mousePosition = r.GetMousePosition();
+        }
+
+        // KEYBOARD INPUT
+
         if (r.IsKeyPressed(r.KEY_RIGHT)) {
-            selected_image_index = @min(selected_image_index + 1, imagesList.items.len - 1);
-            selected_image = imagesList.items[selected_image_index];
             r.SetWindowSize(@intCast(selected_image.dimension[0]), @intCast(selected_image.dimension[1]));
-            rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale);
+
+            setImageIndex(selected_image_index + 1, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
         }
         if (r.IsKeyPressed(r.KEY_LEFT)) {
             if (selected_image_index != 0) {
-                selected_image_index = @max(selected_image_index - 1, 0);
-                selected_image = imagesList.items[selected_image_index];
                 r.SetWindowSize(@intCast(selected_image.dimension[0]), @intCast(selected_image.dimension[1]));
-                rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale);
+                setImageIndex(selected_image_index - 1, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
             }
         }
 
@@ -130,17 +143,84 @@ pub fn main() !void {
             .x = imagePosX,
             .y = imagePosY,
         }, 0, scale, r.WHITE);
+
+        // THUMNAILS
+        for (imagesList.items, 0..) |image, i| {
+            const small_image_scale = rescale_thumnail(image.dimension, bottom_padding, bottom_padding);
+            const x: f32 = @floatFromInt(@as(c_int, @intCast(i)) * (bottom_padding + thumnail_padding));
+            const y: f32 = @floatFromInt(windowHeight - bottom_padding);
+            r.DrawTextureEx(image.texture, .{
+                .x = x,
+                .y = y,
+            }, 0, small_image_scale, r.WHITE);
+            if (mouseClicked) {
+                if (pointIntersectsRectangle(.{ mousePosition.x, mousePosition.y }, x, y, @floatFromInt(bottom_padding), @floatFromInt(bottom_padding))) {
+                    setImageIndex(i, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
+                }
+            }
+        }
+        // END THUMNAILS
     }
 }
 
+fn setImageIndex(
+    new_image_index: usize,
+    selected_image_index: *usize,
+    selected_image: *ImageToShow,
+    imagesList: *std.ArrayList(ImageToShow),
+    imagePosX: *f32,
+    imagePosY: *f32,
+    scale: *f32,
+    bottom_padding: c_int,
+) void {
+    selected_image_index.* = @min(new_image_index, imagesList.items.len - 1);
+    selected_image_index.* = @max(new_image_index, 0);
+
+    selected_image.* = imagesList.items[selected_image_index.*];
+    rescale(imagePosX, imagePosY, selected_image.dimension, scale, bottom_padding);
+}
+fn pointIntersectsRectangle(point: @Vector(2, f32), x: f32, y: f32, width: f32, height: f32) bool {
+    if (point[0] > x and point[0] < x + width) {
+        if (point[1] > y and point[1] < y + height) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn rescale_thumnail(
+    realImageDimension: @Vector(2, u32),
+    height: i32,
+    width: i32,
+) f32 {
+    var scale: f32 = 1;
+    if (realImageDimension[0] > width) {
+        scale = @as(f32, @floatFromInt(width)) / @as(f32, @floatFromInt(realImageDimension[0]));
+    }
+    if (realImageDimension[1] > height) {
+        scale = @min(scale, @as(f32, @floatFromInt(height)) / @as(f32, @floatFromInt(realImageDimension[1])));
+    }
+    if (scale != 1) {
+        return scale;
+    }
+    // image is smaller than screen
+    if (realImageDimension[0] < width) {
+        scale = @max(scale, @as(f32, @floatFromInt(height)) / @as(f32, @floatFromInt(realImageDimension[1])));
+    }
+    if (realImageDimension[1] < height) {
+        scale = @max(scale, @as(f32, @floatFromInt(height)) / @as(f32, @floatFromInt(realImageDimension[1])));
+    }
+    return scale;
+}
 fn rescale(
     imagePosX: *f32,
     imagePosY: *f32,
     realImageDimension: @Vector(2, u32),
     scale: *f32,
+    bottom_padding: c_int,
 ) void {
     const windowWidth = r.GetRenderWidth();
-    const windowHeight = r.GetRenderHeight();
+    const windowHeight = r.GetRenderHeight() - bottom_padding;
     var scaledImageDimension: @Vector(2, f32) = undefined;
     std.log.debug("window w: {d} h: {d}\n", .{ windowWidth, windowHeight });
     std.log.debug("image {d}", .{realImageDimension});
