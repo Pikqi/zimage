@@ -58,7 +58,7 @@ pub fn main() !void {
 
     // Window must be init before texure loading (opengl context must be available)
     r.SetConfigFlags(r.FLAG_VSYNC_HINT | r.FLAG_MSAA_4X_HINT | r.FLAG_WINDOW_RESIZABLE);
-    r.InitWindow(1, 1, "zimage");
+    r.InitWindow(800, 600, "zimage");
 
     var imagesList = try std.ArrayList(ImageToShow).initCapacity(alloc, 5);
     defer imagesList.deinit();
@@ -157,13 +157,10 @@ pub fn main() !void {
         // KEYBOARD INPUT
 
         if (r.IsKeyPressed(r.KEY_RIGHT)) {
-            r.SetWindowSize(@intCast(selected_image.dimension[0]), @intCast(selected_image.dimension[1]));
-
             setImageIndex(selected_image_index + 1, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, &windowInfo);
         }
         if (r.IsKeyPressed(r.KEY_LEFT)) {
             if (selected_image_index != 0) {
-                r.SetWindowSize(@intCast(selected_image.dimension[0]), @intCast(selected_image.dimension[1]));
                 setImageIndex(selected_image_index - 1, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, &windowInfo);
             }
         }
