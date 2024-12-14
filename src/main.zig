@@ -5,8 +5,6 @@ const r = @cImport({
     @cInclude("rlgl.h");
 });
 
-const thumnail_padding = 20;
-
 const transparent = std.mem.zeroInit(r.Color, .{ 255, 255, 255, 125 });
 
 const ImageToShow = struct {
@@ -19,6 +17,14 @@ fn isSupportedPicture(imgName: []const u8) bool {
     return std.mem.endsWith(u8, imgName, ".png") or
         std.mem.endsWith(u8, imgName, ".jpg");
 }
+const WindowInfo = struct {
+    bottom_padding: c_int = 50,
+    horizontalScroll: c_int = 0,
+    thumbnail_margin: c_int = 20,
+    windowWidth: c_int = 1,
+    windowHeight: c_int = 1,
+    thumbarWidth: c_int,
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -51,10 +57,8 @@ pub fn main() !void {
     defer alloc.free(path);
 
     // Window must be init before texure loading (opengl context must be available)
-    var windowWidth: c_int = 1;
-    var windowHeight: c_int = 1;
     r.SetConfigFlags(r.FLAG_VSYNC_HINT | r.FLAG_MSAA_4X_HINT | r.FLAG_WINDOW_RESIZABLE);
-    r.InitWindow(windowWidth, windowHeight, "zimage");
+    r.InitWindow(1, 1, "zimage");
 
     var imagesList = try std.ArrayList(ImageToShow).initCapacity(alloc, 5);
     defer imagesList.deinit();
@@ -110,28 +114,40 @@ pub fn main() !void {
     var imagePosX: f32 = undefined;
     var imagePosY: f32 = undefined;
     var scale: f32 = 1;
-    var bottom_padding: c_int = 50;
-    rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale, bottom_padding);
+
+    var windowInfo: WindowInfo = .{ .thumbarWidth = undefined };
+
+    windowInfo.thumbarWidth = @as(c_int, @intCast(imagesList.items.len)) * (windowInfo.bottom_padding + @as(c_int, @intCast(windowInfo.thumbnail_margin)));
+
+    rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale, windowInfo.bottom_padding);
 
     var mousePosition = r.GetMousePosition();
     var mouseClicked = false;
     std.log.debug("list items size {d}\n", .{imagesList.items.len});
     while (!r.WindowShouldClose()) {
-        bottom_padding = @divFloor(windowHeight, 5);
-        if (r.GetRenderHeight() != windowHeight or windowWidth != r.GetRenderWidth()) {
-            windowHeight = r.GetRenderHeight();
-            windowWidth = r.GetRenderWidth();
-            rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale, bottom_padding);
+        windowInfo.bottom_padding = @divFloor(windowInfo.windowHeight, 5);
+        if (r.GetRenderHeight() != windowInfo.windowHeight or windowInfo.windowWidth != r.GetRenderWidth()) {
+            windowInfo.windowHeight = r.GetRenderHeight();
+            windowInfo.windowWidth = r.GetRenderWidth();
+            rescale(&imagePosX, &imagePosY, selected_image.dimension, &scale, windowInfo.bottom_padding);
         }
 
         // MOUSE INPUT
 
+        //  VERTICAL SCROLL
         if (r.GetMouseWheelMoveV().y != 0) {
-            if (pointIntersectsRectangle(.{ r.GetMousePosition().x, r.GetMousePosition().y }, 0, @floatFromInt(windowHeight - bottom_padding), @floatFromInt(windowWidth), @floatFromInt(windowHeight))) {
+            if (pointIntersectsRectangle(.{ r.GetMousePosition().x, r.GetMousePosition().y }, 0, @floatFromInt(windowInfo.windowHeight - windowInfo.bottom_padding), @floatFromInt(windowInfo.windowWidth), @floatFromInt(windowInfo.windowHeight))) {
                 const wantedIndex: usize = @intCast(@max(@as(isize, @intCast(selected_image_index)) + @as(isize, @intFromFloat(r.GetMouseWheelMoveV().y)), 0));
-                setImageIndex(wantedIndex, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
+                setImageIndex(wantedIndex, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, &windowInfo);
             }
         }
+        // HORIZONTAL SCROLL
+        if (r.GetMouseWheelMoveV().x != 0) {
+            if (pointIntersectsRectangle(.{ r.GetMousePosition().x, r.GetMousePosition().y }, 0, @floatFromInt(windowInfo.windowHeight - windowInfo.bottom_padding), @floatFromInt(windowInfo.windowWidth), @floatFromInt(windowInfo.windowHeight))) {
+                windowInfo.horizontalScroll = clamp(windowInfo.horizontalScroll + 60 * @as(c_int, @intFromFloat(r.GetMouseWheelMoveV().x)), 0, windowInfo.thumbarWidth);
+            }
+        }
+
         mouseClicked = false;
         if (r.IsMouseButtonPressed(r.MOUSE_BUTTON_LEFT)) {
             mouseClicked = true;
@@ -143,12 +159,12 @@ pub fn main() !void {
         if (r.IsKeyPressed(r.KEY_RIGHT)) {
             r.SetWindowSize(@intCast(selected_image.dimension[0]), @intCast(selected_image.dimension[1]));
 
-            setImageIndex(selected_image_index + 1, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
+            setImageIndex(selected_image_index + 1, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, &windowInfo);
         }
         if (r.IsKeyPressed(r.KEY_LEFT)) {
             if (selected_image_index != 0) {
                 r.SetWindowSize(@intCast(selected_image.dimension[0]), @intCast(selected_image.dimension[1]));
-                setImageIndex(selected_image_index - 1, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
+                setImageIndex(selected_image_index - 1, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, &windowInfo);
             }
         }
 
@@ -165,17 +181,17 @@ pub fn main() !void {
 
         // THUMNAILS
         for (imagesList.items, 0..) |image, i| {
-            const small_image_scale = rescale_thumnail(image.dimension, bottom_padding, bottom_padding);
-            const x: f32 = @floatFromInt(@as(c_int, @intCast(i)) * (bottom_padding + thumnail_padding));
-            const y: f32 = @floatFromInt(windowHeight - bottom_padding);
+            const small_image_scale = rescale_thumnail(image.dimension, windowInfo.bottom_padding, windowInfo.bottom_padding);
+            const x: f32 = @floatFromInt(@as(c_int, @intCast(i)) * (windowInfo.bottom_padding + windowInfo.thumbnail_margin) - windowInfo.horizontalScroll);
+            const y: f32 = @floatFromInt(windowInfo.windowHeight - windowInfo.bottom_padding);
 
             r.DrawTextureEx(image.texture, .{
                 .x = x,
                 .y = y,
             }, 0, small_image_scale, if (selected_image_index == i) r.WHITE else transparent);
             if (mouseClicked) {
-                if (pointIntersectsRectangle(.{ mousePosition.x, mousePosition.y }, x, y, @floatFromInt(bottom_padding), @floatFromInt(bottom_padding))) {
-                    setImageIndex(i, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
+                if (pointIntersectsRectangle(.{ mousePosition.x, mousePosition.y }, x, y, @floatFromInt(windowInfo.bottom_padding), @floatFromInt(windowInfo.bottom_padding))) {
+                    setImageIndex(i, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, &windowInfo);
                 }
             }
         }
@@ -191,12 +207,21 @@ fn setImageIndex(
     imagePosX: *f32,
     imagePosY: *f32,
     scale: *f32,
-    bottom_padding: c_int,
+    windowInfo: *WindowInfo,
 ) void {
     selected_image_index.* = clamp(new_image_index, 0, imagesList.items.len - 1);
 
     selected_image.* = imagesList.items[selected_image_index.*];
-    rescale(imagePosX, imagePosY, selected_image.dimension, scale, bottom_padding);
+    rescale(imagePosX, imagePosY, selected_image.dimension, scale, windowInfo.bottom_padding);
+
+    const elementThumbPosition: c_int = @as(c_int, @intCast(selected_image_index.*)) * (windowInfo.bottom_padding + windowInfo.thumbnail_margin);
+
+    windowInfo.horizontalScroll = clamp(elementThumbPosition, 0, windowInfo.thumbarWidth);
+
+    std.log.debug("scroll {d} {d}", .{ @as(c_int, @intCast(selected_image_index.* + 1)) * (windowInfo.bottom_padding + windowInfo.thumbnail_margin), windowInfo.windowWidth });
+
+    // if(@as(c_int, @intCast(selected_image_index.* + 1)) * (bottom_padding + thumbnail_margin) > windowInfo.windowWidth)
+
 }
 fn pointIntersectsRectangle(point: @Vector(2, f32), x: f32, y: f32, width: f32, height: f32) bool {
     if (point[0] > x and point[0] < x + width) {
