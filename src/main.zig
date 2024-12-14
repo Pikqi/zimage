@@ -213,7 +213,7 @@ fn setImageIndex(
 
     const elementThumbPosition: c_int = @as(c_int, @intCast(selected_image_index.*)) * (windowInfo.bottom_padding + windowInfo.thumbnail_margin);
 
-    windowInfo.horizontalScroll = clamp(elementThumbPosition, 0, windowInfo.thumbarWidth);
+    windowInfo.horizontalScroll = clamp(elementThumbPosition, 0, windowInfo.thumbarWidth + (windowInfo.bottom_padding + windowInfo.thumbnail_margin));
 
     std.log.debug("scroll {d} {d}", .{ @as(c_int, @intCast(selected_image_index.* + 1)) * (windowInfo.bottom_padding + windowInfo.thumbnail_margin), windowInfo.windowWidth });
 
