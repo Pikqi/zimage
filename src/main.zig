@@ -7,6 +7,8 @@ const r = @cImport({
 
 const thumnail_padding = 20;
 
+const transparent = std.mem.zeroInit(r.Color, .{ 255, 255, 255, 125 });
+
 const ImageToShow = struct {
     texture: r.Texture,
     dimension: @Vector(2, u32),
@@ -166,10 +168,11 @@ pub fn main() !void {
             const small_image_scale = rescale_thumnail(image.dimension, bottom_padding, bottom_padding);
             const x: f32 = @floatFromInt(@as(c_int, @intCast(i)) * (bottom_padding + thumnail_padding));
             const y: f32 = @floatFromInt(windowHeight - bottom_padding);
+
             r.DrawTextureEx(image.texture, .{
                 .x = x,
                 .y = y,
-            }, 0, small_image_scale, r.WHITE);
+            }, 0, small_image_scale, if (selected_image_index == i) r.WHITE else transparent);
             if (mouseClicked) {
                 if (pointIntersectsRectangle(.{ mousePosition.x, mousePosition.y }, x, y, @floatFromInt(bottom_padding), @floatFromInt(bottom_padding))) {
                     setImageIndex(i, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
