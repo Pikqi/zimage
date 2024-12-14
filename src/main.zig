@@ -115,6 +115,12 @@ pub fn main() !void {
 
         // MOUSE INPUT
 
+        if (r.GetMouseWheelMoveV().y != 0) {
+            if (pointIntersectsRectangle(.{ r.GetMousePosition().x, r.GetMousePosition().y }, 0, @floatFromInt(windowHeight - bottom_padding), @floatFromInt(windowWidth), @floatFromInt(windowHeight))) {
+                const wantedIndex: usize = @intCast(@max(@as(isize, @intCast(selected_image_index)) + @as(isize, @intFromFloat(r.GetMouseWheelMoveV().y)), 0));
+                setImageIndex(wantedIndex, &selected_image_index, &selected_image, &imagesList, &imagePosX, &imagePosY, &scale, bottom_padding);
+            }
+        }
         mouseClicked = false;
         if (r.IsMouseButtonPressed(r.MOUSE_BUTTON_LEFT)) {
             mouseClicked = true;
@@ -173,8 +179,7 @@ fn setImageIndex(
     scale: *f32,
     bottom_padding: c_int,
 ) void {
-    selected_image_index.* = @min(new_image_index, imagesList.items.len - 1);
-    selected_image_index.* = @max(new_image_index, 0);
+    selected_image_index.* = clamp(new_image_index, 0, imagesList.items.len - 1);
 
     selected_image.* = imagesList.items[selected_image_index.*];
     rescale(imagePosX, imagePosY, selected_image.dimension, scale, bottom_padding);
@@ -186,6 +191,16 @@ fn pointIntersectsRectangle(point: @Vector(2, f32), x: f32, y: f32, width: f32, 
         }
     }
     return false;
+}
+
+fn clamp(val: anytype, min: @TypeOf(val), max: @TypeOf(val)) @TypeOf(val) {
+    if (val >= max) {
+        return max;
+    }
+    if (val <= min) {
+        return min;
+    }
+    return val;
 }
 
 fn rescale_thumnail(
