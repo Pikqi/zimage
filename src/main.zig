@@ -10,6 +10,7 @@ const thumnail_padding = 20;
 const ImageToShow = struct {
     texture: r.Texture,
     dimension: @Vector(2, u32),
+    nameZ: [:0]u8,
 };
 
 fn isSupportedPicture(imgName: []const u8) bool {
@@ -55,6 +56,11 @@ pub fn main() !void {
 
     var imagesList = try std.ArrayList(ImageToShow).initCapacity(alloc, 5);
     defer imagesList.deinit();
+    defer {
+        for (imagesList.items) |value| {
+            alloc.free(value.nameZ);
+        }
+    }
 
     if (!argIsFile) {
         var a = try std.fs.openDirAbsolute(path, .{ .access_sub_paths = false, .iterate = true });
@@ -81,7 +87,10 @@ pub fn main() !void {
 
                 const texture = r.LoadTextureFromImage(image);
 
-                try imagesList.append(ImageToShow{ .texture = texture, .dimension = .{ @intCast(image.width), @intCast(image.height) } });
+                try imagesList.append(ImageToShow{ .texture = texture, .dimension = .{
+                    @intCast(image.width),
+                    @intCast(image.height),
+                }, .nameZ = try alloc.dupeZ(u8, val.name) });
             }
         }
     } else {
@@ -149,6 +158,8 @@ pub fn main() !void {
             .x = imagePosX,
             .y = imagePosY,
         }, 0, scale, r.WHITE);
+
+        r.DrawText(selected_image.nameZ, 20, 20, 40, r.BLACK);
 
         // THUMNAILS
         for (imagesList.items, 0..) |image, i| {
